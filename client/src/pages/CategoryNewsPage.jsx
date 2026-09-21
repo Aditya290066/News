@@ -146,17 +146,17 @@ export default function CategoryNewsPage({ category = 'technology' }) {
   return (
     <div className="container" style={{ paddingBlock: '2.5rem' }}>
       {/* Category Header */}
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '2rem', flexWrap: 'wrap', gap: '1rem' }}>
+      <div className="category-header-wrap" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '2rem', flexWrap: 'wrap', gap: '1rem' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '1.1rem' }}>
           <div 
-            className="brand-icon" 
-            style={{ width: '52px', height: '52px', borderRadius: '14px', background: meta.gradient }}
+            className="brand-icon category-header-icon" 
+            style={{ width: '52px', height: '52px', borderRadius: '14px', background: meta.gradient, flexShrink: 0 }}
           >
             <CategoryIcon size={28} color="#fff" />
           </div>
           <div>
             <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem', flexWrap: 'wrap' }}>
-              <h1 style={{ fontFamily: 'var(--font-heading)', fontSize: '1.85rem', fontWeight: 800 }}>
+              <h1 className="category-header-title" style={{ fontFamily: 'var(--font-heading)', fontSize: '1.85rem', fontWeight: 800 }}>
                 {meta.title}
               </h1>
               <span className={`tag-badge ${meta.tagClass}`}>
@@ -166,7 +166,7 @@ export default function CategoryNewsPage({ category = 'technology' }) {
                 {activeCountry.flag} {activeCountry.label}
               </span>
             </div>
-            <p style={{ color: 'var(--text-secondary)', fontSize: '0.92rem', marginTop: '0.2rem' }}>
+            <p className="category-header-desc" style={{ color: 'var(--text-secondary)', fontSize: '0.92rem', marginTop: '0.2rem' }}>
               {meta.desc}
             </p>
           </div>

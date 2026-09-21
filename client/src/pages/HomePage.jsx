@@ -71,11 +71,12 @@ export default function HomePage() {
           <div>
             <Link 
               to="/search" 
-              className="btn btn-icon btn-ghost" 
+              className="hero-search-pill" 
               title="Search news articles"
               aria-label="Search news articles"
             >
-              <Search size={18} />
+              <Search size={16} />
+              <span>Search headlines...</span>
             </Link>
           </div>
         </div>

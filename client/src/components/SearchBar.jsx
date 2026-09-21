@@ -1,37 +1,31 @@
 /**
  * SearchBar Component
  * 
- * Keyword input with category dropdown and keyboard shortcuts.
- * Automatically pushes query parameters to the /search route.
+ * Clean keyword input with submit and clear actions.
+ * Automatically pushes query parameter to the /search route.
  */
 
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Search, X } from 'lucide-react';
 
-export default function SearchBar({ initialQuery = '', initialCategory = '', onSearch }) {
+export default function SearchBar({ initialQuery = '', onSearch }) {
   const [query, setQuery] = useState(initialQuery);
-  const [category, setCategory] = useState(initialCategory);
   const navigate = useNavigate();
 
   useEffect(() => {
     setQuery(initialQuery);
   }, [initialQuery]);
 
-  useEffect(() => {
-    setCategory(initialCategory);
-  }, [initialCategory]);
-
   const handleSubmit = (e) => {
     e.preventDefault();
     const cleanQ = query.trim();
 
     if (onSearch) {
-      onSearch(cleanQ, category);
+      onSearch(cleanQ);
     } else {
       const params = new URLSearchParams();
       if (cleanQ) params.set('q', cleanQ);
-      if (category && category !== 'all') params.set('category', category);
       navigate(`/search?${params.toString()}`);
     }
   };
@@ -50,7 +44,7 @@ export default function SearchBar({ initialQuery = '', initialCategory = '', onS
         <input
           type="text"
           className="search-input"
-          placeholder="Search headlines, artificial intelligence, Premier League, NBA..."
+          placeholder="Search headlines, technology, sports, business..."
           value={query}
           onChange={(e) => setQuery(e.target.value)}
         />
@@ -60,25 +54,14 @@ export default function SearchBar({ initialQuery = '', initialCategory = '', onS
             type="button" 
             onClick={handleClear} 
             className="btn btn-icon btn-ghost btn-sm"
-            style={{ color: 'var(--text-muted)' }}
+            style={{ color: 'var(--text-muted)', padding: '0.25rem' }}
             aria-label="Clear search"
           >
             <X size={16} />
           </button>
         )}
 
-        <select
-          className="search-category-select"
-          value={category}
-          onChange={(e) => setCategory(e.target.value)}
-          aria-label="Filter by Category"
-        >
-          <option value="all">All Topics</option>
-          <option value="technology">Technology</option>
-          <option value="sports">Sports</option>
-        </select>
-
-        <button type="submit" className="btn btn-primary btn-sm">
+        <button type="submit" className="btn btn-primary btn-sm search-submit-btn">
           Search
         </button>
       </form>

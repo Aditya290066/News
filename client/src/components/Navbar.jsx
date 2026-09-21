@@ -289,7 +289,7 @@ export default function Navbar() {
               )}
             </div>
           ) : (
-            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+            <div className="nav-auth-desktop">
               <Link to="/login" className="btn btn-ghost btn-sm">
                 Sign In
               </Link>
@@ -313,8 +313,56 @@ export default function Navbar() {
       {/* Mobile Drawer Navigation */}
       {mobileMenuOpen && (
         <div className="mobile-nav">
+          {/* Mobile Auth Header in Drawer */}
+          <div className="mobile-auth-section">
+            {isAuthenticated ? (
+              <div className="mobile-user-card">
+                <div className="user-avatar">
+                  {user?.name ? user.name.charAt(0).toUpperCase() : 'U'}
+                </div>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <p style={{ fontWeight: 700, fontSize: '0.92rem', color: 'var(--text-primary)', margin: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                    {user?.name}
+                  </p>
+                  <p style={{ fontSize: '0.75rem', color: 'var(--text-muted)', margin: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                    {user?.email}
+                  </p>
+                </div>
+                <button 
+                  onClick={handleLogout} 
+                  className="btn btn-ghost btn-sm" 
+                  title="Sign out"
+                  style={{ color: 'var(--accent-red)', padding: '0.4rem 0.6rem' }}
+                >
+                  <LogOut size={16} />
+                  <span>Exit</span>
+                </button>
+              </div>
+            ) : (
+              <div className="mobile-auth-buttons">
+                <Link 
+                  to="/login" 
+                  onClick={() => setMobileMenuOpen(false)}
+                  className="btn btn-secondary btn-sm" 
+                  style={{ flex: 1 }}
+                >
+                  Sign In
+                </Link>
+                <Link 
+                  to="/register" 
+                  onClick={() => setMobileMenuOpen(false)}
+                  className="btn btn-primary btn-sm" 
+                  style={{ flex: 1 }}
+                >
+                  Register
+                </Link>
+              </div>
+            )}
+          </div>
+
           <NavLink
             to="/"
+            onClick={() => setMobileMenuOpen(false)}
             className={({ isActive }) => `nav-link ${isActive ? 'active' : ''}`}
             end
           >
@@ -324,6 +372,7 @@ export default function Navbar() {
 
           <NavLink
             to="/tech"
+            onClick={() => setMobileMenuOpen(false)}
             className={({ isActive }) => `nav-link ${isActive ? 'active' : ''}`}
           >
             <Cpu size={18} style={{ color: 'var(--accent-tech)' }} />
@@ -332,6 +381,7 @@ export default function Navbar() {
 
           <NavLink
             to="/sports"
+            onClick={() => setMobileMenuOpen(false)}
             className={({ isActive }) => `nav-link ${isActive ? 'active' : ''}`}
           >
             <Trophy size={18} style={{ color: 'var(--accent-sports)' }} />
@@ -340,6 +390,7 @@ export default function Navbar() {
 
           <NavLink
             to="/business"
+            onClick={() => setMobileMenuOpen(false)}
             className={({ isActive }) => `nav-link ${isActive ? 'active' : ''}`}
           >
             <TrendingUp size={18} style={{ color: 'var(--accent-business)' }} />
@@ -348,6 +399,7 @@ export default function Navbar() {
 
           <NavLink
             to="/science"
+            onClick={() => setMobileMenuOpen(false)}
             className={({ isActive }) => `nav-link ${isActive ? 'active' : ''}`}
           >
             <FlaskConical size={18} style={{ color: 'var(--accent-science)' }} />
@@ -356,6 +408,7 @@ export default function Navbar() {
 
           <NavLink
             to="/health"
+            onClick={() => setMobileMenuOpen(false)}
             className={({ isActive }) => `nav-link ${isActive ? 'active' : ''}`}
           >
             <HeartPulse size={18} style={{ color: 'var(--accent-health)' }} />
@@ -364,6 +417,7 @@ export default function Navbar() {
 
           <NavLink
             to="/entertainment"
+            onClick={() => setMobileMenuOpen(false)}
             className={({ isActive }) => `nav-link ${isActive ? 'active' : ''}`}
           >
             <Film size={18} style={{ color: 'var(--accent-entertainment)' }} />
@@ -372,6 +426,7 @@ export default function Navbar() {
 
           <NavLink
             to="/world"
+            onClick={() => setMobileMenuOpen(false)}
             className={({ isActive }) => `nav-link ${isActive ? 'active' : ''}`}
           >
             <Globe2 size={18} style={{ color: 'var(--accent-world)' }} />
@@ -380,6 +435,7 @@ export default function Navbar() {
 
           <NavLink
             to="/saved"
+            onClick={() => setMobileMenuOpen(false)}
             className={({ isActive }) => `nav-link ${isActive ? 'active' : ''}`}
           >
             <Bookmark size={18} />
@@ -388,6 +444,7 @@ export default function Navbar() {
 
           <NavLink
             to="/search"
+            onClick={() => setMobileMenuOpen(false)}
             className={({ isActive }) => `nav-link ${isActive ? 'active' : ''}`}
           >
             <Search size={18} />
@@ -402,7 +459,10 @@ export default function Navbar() {
               {countries.map((c) => (
                 <button
                   key={c.code}
-                  onClick={() => setCountry(c.code)}
+                  onClick={() => {
+                    setCountry(c.code);
+                    setMobileMenuOpen(false);
+                  }}
                   className={`btn btn-sm ${country === c.code ? 'btn-primary' : 'btn-ghost'}`}
                   style={{ display: 'flex', alignItems: 'center', gap: '0.35rem', padding: '0.3rem 0.6rem' }}
                 >
