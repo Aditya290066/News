@@ -16,6 +16,7 @@ import { CountryProvider } from './context/CountryContext';
 import Navbar from './components/Navbar';
 import Footer from './components/Footer';
 import ProtectedRoute from './components/ProtectedRoute';
+import { Analytics } from '@vercel/analytics/react';
 
 import HomePage from './pages/HomePage';
 import CategoryNewsPage from './pages/CategoryNewsPage';
@@ -61,6 +62,7 @@ export default function App() {
                   </Routes>
                 </main>
                 <Footer />
+                <Analytics />
               </div>
             </CountryProvider>
           </BookmarkProvider>
