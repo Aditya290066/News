@@ -21,8 +21,6 @@ import {
   Globe2,
   Bookmark,
   Search,
-  Sun,
-  Moon,
   ChevronDown,
   LogOut,
   Menu,
@@ -31,14 +29,12 @@ import {
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { useBookmarks } from '../context/BookmarkContext';
-import { useTheme } from '../context/ThemeContext';
 import { useCountry } from '../context/CountryContext';
 import LanguageSelector from './LanguageSelector';
 
 export default function Navbar() {
   const { user, isAuthenticated, logout } = useAuth();
   const { bookmarkCount } = useBookmarks();
-  const { theme, toggleTheme, isDark } = useTheme();
   const { country, setCountry, activeCountry, countries } = useCountry();
 
   const [userMenuOpen, setUserMenuOpen] = useState(false);
@@ -246,16 +242,6 @@ export default function Navbar() {
               </div>
             )}
           </div>
-
-          {/* Theme Toggle Button (Sun / Moon) */}
-          <button
-            className="theme-toggle-btn"
-            onClick={toggleTheme}
-            title={isDark ? 'Switch to Light Mode' : 'Switch to Dark Mode'}
-            aria-label={isDark ? 'Switch to Light Mode' : 'Switch to Dark Mode'}
-          >
-            {isDark ? <Sun size={18} color="#f59e0b" /> : <Moon size={18} color="#475569" />}
-          </button>
 
           {/* Authentication State */}
           {isAuthenticated ? (
