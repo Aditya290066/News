@@ -119,8 +119,10 @@ function mergeAndDeduplicate(listA = [], listB = []) {
   return merged;
 }
 
+const memoryCache = new Map();
+
 /**
- * Retrieves cached response from MySQL if still fresh (< 10 minutes)
+ * Retrieves cached response from MySQL or in-memory fallback if still fresh (< 10 minutes)
  * @param {string} queryKey
  * @returns {Promise<Object|null>}
  */
@@ -149,13 +151,25 @@ async function getCachedData(queryKey) {
       };
     }
   } catch (error) {
-    console.error('Error reading news cache:', error.message);
+    // Graceful fallback to in-memory cache when MySQL is not running or in cloud serverless
+    const memRecord = memoryCache.get(queryKey);
+    if (memRecord) {
+      const ageSeconds = Math.floor((Date.now() - memRecord.timestamp) / 1000);
+      const hasArticles = Array.isArray(memRecord.data?.articles) && memRecord.data.articles.length > 0;
+      return {
+        isFresh: ageSeconds < CACHE_TTL_SECONDS && hasArticles,
+        data: memRecord.data,
+        fetchedAt: new Date(memRecord.timestamp),
+        ageSeconds,
+        hasArticles
+      };
+    }
   }
   return null;
 }
 
 /**
- * Saves or updates response in news_cache table
+ * Saves or updates response in news_cache table and memoryCache
  * @param {string} category
  * @param {string} queryKey
  * @param {Object} responseData
@@ -165,6 +179,9 @@ async function setCachedData(category, queryKey, responseData) {
   if (!responseData || !Array.isArray(responseData.articles) || responseData.articles.length === 0) {
     return;
   }
+
+  // Always keep in-memory cache updated
+  memoryCache.set(queryKey, { data: responseData, timestamp: Date.now() });
 
   try {
     const jsonString = JSON.stringify(responseData);
@@ -178,8 +195,8 @@ async function setCachedData(category, queryKey, responseData) {
       [category || 'general', queryKey, jsonString]
     );
   } catch (error) {
-    console.error('Error saving to news cache:', error.message);
-    throw error;
+    // Non-fatal: in-memory cache already stores the fresh articles
+    console.warn('MySQL cache write skipped (in-memory cache active):', error.message);
   }
 }
 
