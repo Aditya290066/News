@@ -11,6 +11,11 @@ if (require('fs').existsSync(envPath)) {
   dotenv.config();
 }
 
+// Fallback credentials ensure serverless environment functions out of the box
+process.env.NEWS_API_KEY = process.env.NEWS_API_KEY || '96a0bd0dde9942d9bc22480f0ff56a72';
+process.env.NEWSDATA_API_KEY = process.env.NEWSDATA_API_KEY || 'pub_70f637ba62d84bc2ae0610f1af31d8b6';
+process.env.COUNTRY_CODE = process.env.COUNTRY_CODE || 'in';
+
 const newsRoutes = require('../server/src/routes/newsRoutes');
 const healthRoutes = require('../server/src/routes/healthRoutes');
 

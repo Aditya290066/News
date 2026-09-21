@@ -62,7 +62,7 @@ function normalizeNewsDataArticle(raw, fallbackCategory = 'general') {
  * @returns {Promise<{ articles: Object[], totalResults: number, provider: string, count: number }>}
  */
 async function fetchNewsData(category = 'all', country = 'in') {
-  const apiKey = process.env.NEWSDATA_API_KEY;
+  const apiKey = process.env.NEWSDATA_API_KEY || 'pub_70f637ba62d84bc2ae0610f1af31d8b6';
 
   if (!apiKey || apiKey === 'your_newsdata_key_here' || apiKey.trim() === '') {
     // Graceful fallback if user hasn't configured NewsData key yet
