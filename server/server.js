@@ -14,27 +14,12 @@ const dotenv = require('dotenv');
 // -------------------------------------------------------------
 const envPath = path.join(__dirname, '.env');
 
-if (!fs.existsSync(envPath)) {
-  console.error(`
-\x1b[31m\x1b[1m╔═════════════════════════════════════════════════════════════════════════════╗
-║                      ⚠️   SETUP CONFIGURATION REQUIRED                      ║
-╠═════════════════════════════════════════════════════════════════════════════╣
-║  The configuration file (server/.env) was not found!                        ║
-║                                                                             ║
-║  Please run the one-time interactive setup wizard to configure your app:    ║
-║                                                                             ║
-║    👉  \x1b[33m\x1b[1mnpm run setup\x1b[31m\x1b[1m                                                            ║
-║        (or 'node setup.js' inside the /server directory)                    ║
-║                                                                             ║
-║  This wizard will prompt for your NewsAPI key & MySQL credentials,          ║
-║  write your .env file, and automatically initialize all database tables.    ║
-╚═════════════════════════════════════════════════════════════════════════════╝\x1b[0m
-`);
-  process.exit(1);
+// Load environment variables from .env if present, or fallback to process.env (for cloud deployment)
+if (fs.existsSync(envPath)) {
+  dotenv.config({ path: envPath });
+} else {
+  dotenv.config();
 }
-
-// Load environment variables
-dotenv.config({ path: envPath });
 
 const newsApiKey = process.env.NEWS_API_KEY;
 if (!newsApiKey || newsApiKey === 'your_newsapi_key_here' || newsApiKey.trim() === '') {
