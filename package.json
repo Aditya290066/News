@@ -1,0 +1,28 @@
+{
+  "name": "real-news-monorepo",
+  "version": "1.0.0",
+  "description": "Full-stack Real News application with Node/Express, MySQL, and React (Vite)",
+  "private": true,
+  "scripts": {
+    "install:all": "npm --prefix server install && npm --prefix client install",
+    "setup": "node server/setup.js",
+    "dev": "concurrently -n \"server,client\" -c \"cyan,magenta\" \"npm run server\" \"npm run client\"",
+    "server": "npm --prefix server run dev",
+    "client": "npm --prefix client run dev",
+    "start": "npm --prefix server start",
+    "build": "npm --prefix client run build"
+  },
+  "keywords": [
+    "news",
+    "newsapi",
+    "express",
+    "mysql",
+    "react",
+    "vite"
+  ],
+  "author": "",
+  "license": "ISC",
+  "devDependencies": {
+    "concurrently": "^10.0.5"
+  }
+}
