@@ -18,6 +18,7 @@ const router = express.Router();
  * Query parameters:
  *  - category: string (default: 'all')
  *  - country: string (default: process.env.COUNTRY_CODE || 'in')
+ *  - lang: string ('en', 'hi', 'te') (default: 'en')
  *  - page: number (default: 1)
  *  - pageSize: number (default: 12)
  *  - refresh: boolean (default: false)
@@ -26,11 +27,13 @@ router.get('/', async (req, res, next) => {
   try {
     const category = req.query.category || 'all';
     const country = req.query.country || process.env.COUNTRY_CODE || 'in';
+    const rawLang = (req.query.lang || req.query.language || 'en').toLowerCase().trim();
+    const lang = ['en', 'hi', 'te'].includes(rawLang) ? rawLang : 'en';
     const page = parseInt(req.query.page, 10) || 1;
     const pageSize = parseInt(req.query.pageSize, 10) || 12;
     const forceRefresh = req.query.refresh === 'true';
 
-    const data = await getNewsByCategory(category, page, pageSize, country, forceRefresh);
+    const data = await getNewsByCategory(category, page, pageSize, country, forceRefresh, lang);
     res.json(data);
   } catch (error) {
     next(error);

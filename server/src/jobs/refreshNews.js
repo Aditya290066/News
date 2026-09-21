@@ -71,20 +71,45 @@ async function refreshAllNews(country = 'in') {
     await delay(800);
   }
 
-  // Also refresh the mixed 'all' feed for the home page
+  // Also refresh the mixed 'all' feed for the home page in English
   try {
-    const homeRes = await fetchAndCacheCategory('all', 1, 12, targetCountry);
+    const homeRes = await fetchAndCacheCategory('all', 1, 12, targetCountry, 'en');
     const homeStats = homeRes?.stats || {
       newsApiCount: 0,
       newsDataCount: 0,
       mergedCount: homeRes?.articles?.length || 0
     };
-    console.log(`[cron] home (all) refreshed: ${homeStats.newsApiCount} from NewsAPI + ${homeStats.newsDataCount} from NewsData.io = ${homeStats.mergedCount} total after dedupe`);
-    results.successful.push('all');
+    console.log(`[cron] home (all) [EN] refreshed: ${homeStats.newsApiCount} from NewsAPI + ${homeStats.newsDataCount} from NewsData.io = ${homeStats.mergedCount} total after dedupe`);
+    results.successful.push('all_en');
   } catch (error) {
     const errorMsg = error.response?.data?.message || error.message;
-    console.error(`[cron] home (all) refresh FAILED: ${errorMsg}`);
-    results.failed.push({ category: 'all', error: errorMsg });
+    console.error(`[cron] home (all) [EN] refresh FAILED: ${errorMsg}`);
+    results.failed.push({ category: 'all_en', error: errorMsg });
+  }
+
+  // -------------------------------------------------------------
+  // Multilingual Cache Warmup: Hindi (hi) & Telugu (te)
+  // Refreshes high-priority categories while strictly safeguarding NewsData free-tier quota (~200 reqs/day)
+  // Primary categories: all (Home), general (Top Stories), technology, sports
+  // -------------------------------------------------------------
+  const MULTILINGUAL_CATEGORIES = ['all', 'general', 'technology', 'sports'];
+  const secondaryLanguages = ['hi', 'te'];
+
+  for (const lang of secondaryLanguages) {
+    for (const category of MULTILINGUAL_CATEGORIES) {
+      try {
+        const langRes = await fetchAndCacheCategory(category, 1, 12, targetCountry, lang);
+        const count = langRes?.articles?.length || 0;
+        console.log(`[cron] [${lang.toUpperCase()}] ${category} refreshed: ${count} articles cached`);
+        results.successful.push(`${category}_${lang}`);
+      } catch (error) {
+        const errorMsg = error.response?.data?.message || error.message;
+        console.warn(`[cron] [${lang.toUpperCase()}] ${category} refresh notice: ${errorMsg}`);
+        results.failed.push({ category: `${category}_${lang}`, error: errorMsg });
+      }
+
+      await delay(800);
+    }
   }
 
   const durationSec = ((Date.now() - startTime) / 1000).toFixed(1);

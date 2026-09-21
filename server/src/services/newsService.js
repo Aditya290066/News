@@ -317,40 +317,54 @@ async function fetchFromNewsApi(apiCategory, displayCategory, country, page, pag
 }
 
 /**
- * Fetches latest headlines, merges providers if country=in, normalizes articles,
+ * Fetches latest headlines, merges providers if country=in & lang=en,
+ * uses NewsData.io exclusively for Hindi/Telugu, normalizes articles,
  * and writes to MySQL news_cache.
  * 
  * @param {string} category
  * @param {number} page
  * @param {number} pageSize
  * @param {string} country - Target country code (defaults to process.env.COUNTRY_CODE || 'in')
+ * @param {string} lang - Language code ('en', 'hi', 'te') (defaults to 'en')
  * @returns {Promise<Object>}
  */
-async function fetchAndCacheCategory(category = 'all', page = 1, pageSize = 12, country = null) {
+async function fetchAndCacheCategory(category = 'all', page = 1, pageSize = 12, country = null, lang = 'en') {
   const targetCountry = (country || process.env.COUNTRY_CODE || 'in').toLowerCase().trim();
+  const targetLang = (lang || 'en').toLowerCase().trim();
   const rawCategory = (category || 'all').toLowerCase().trim();
   const apiCategory = CATEGORY_MAP[rawCategory] || (rawCategory === 'all' ? 'all' : 'general');
   const displayCategory = rawCategory === 'general' ? 'world' : rawCategory;
 
   const isIndia = targetCountry === 'in';
-  // Cache key reflects merged status for India
-  const queryKey = isIndia
-    ? `category:${displayCategory}:country:in:merged:page:${page}:ps:${pageSize}`
-    : `category:${displayCategory}:country:${targetCountry}:page:${page}:ps:${pageSize}`;
+  // Cache key incorporates language so en, hi, and te results are cached separately
+  const queryKey = (targetLang !== 'en')
+    ? `category:${displayCategory}:country:in:lang:${targetLang}:page:${page}:ps:${pageSize}`
+    : (isIndia
+        ? `category:${displayCategory}:country:in:lang:en:merged:page:${page}:ps:${pageSize}`
+        : `category:${displayCategory}:country:${targetCountry}:lang:en:page:${page}:ps:${pageSize}`);
 
   const newsApiKey = process.env.NEWS_API_KEY || '96a0bd0dde9942d9bc22480f0ff56a72';
 
   let mergedArticles = [];
   let totalResults = 0;
-  let stats = { newsApiCount: 0, newsDataCount: 0, mergedCount: 0 };
+  let stats = { newsApiCount: 0, newsDataCount: 0, mergedCount: 0, language: targetLang };
 
-  if (isIndia) {
+  if (targetLang === 'hi' || targetLang === 'te') {
     // -------------------------------------------------------------
-    // Parallel Execution for India: NewsAPI.org + NewsData.io
+    // Multilingual Execution: NewsData.io ONLY (NewsAPI does not support Hindi/Telugu)
+    // -------------------------------------------------------------
+    const newsDataResult = await fetchNewsData(displayCategory, 'in', targetLang);
+    mergedArticles = newsDataResult.articles || [];
+    totalResults = newsDataResult.totalResults || mergedArticles.length;
+    stats.newsDataCount = mergedArticles.length;
+    stats.mergedCount = mergedArticles.length;
+  } else if (isIndia) {
+    // -------------------------------------------------------------
+    // Parallel Execution for India (English): NewsAPI.org + NewsData.io
     // -------------------------------------------------------------
     const [newsApiResult, newsDataResult] = await Promise.allSettled([
       fetchFromNewsApi(apiCategory, displayCategory, 'in', page, pageSize, newsApiKey),
-      fetchNewsData(displayCategory, 'in')
+      fetchNewsData(displayCategory, 'in', 'en')
     ]);
 
     const newsApiArticles = newsApiResult.status === 'fulfilled' ? newsApiResult.value.articles : [];
@@ -378,7 +392,7 @@ async function fetchAndCacheCategory(category = 'all', page = 1, pageSize = 12, 
 
     // Fallback to NewsData if NewsAPI returned empty
     if (mergedArticles.length === 0) {
-      const fallbackNewsData = await fetchNewsData(displayCategory, targetCountry);
+      const fallbackNewsData = await fetchNewsData(displayCategory, targetCountry, 'en');
       mergedArticles = fallbackNewsData.articles;
       totalResults = fallbackNewsData.totalResults;
       stats.newsDataCount = mergedArticles.length;
@@ -398,19 +412,23 @@ async function fetchAndCacheCategory(category = 'all', page = 1, pageSize = 12, 
       };
     }
 
-    // Always guarantee non-empty fresh stories to prevent empty UI
-    console.warn(`[newsService] Providing curated stories for ${displayCategory}/${targetCountry}`);
-    mergedArticles = getFallbackArticles(displayCategory, pageSize);
-    totalResults = mergedArticles.length;
-    stats.curatedFallback = true;
-    stats.mergedCount = mergedArticles.length;
+    // Only inject English curated fallback stories for English queries
+    // For Hindi/Telugu, preserve empty state so frontend can show friendly low-coverage notice
+    if (targetLang === 'en') {
+      console.warn(`[newsService] Providing curated stories for ${displayCategory}/${targetCountry} (en)`);
+      mergedArticles = getFallbackArticles(displayCategory, pageSize);
+      totalResults = mergedArticles.length;
+      stats.curatedFallback = true;
+      stats.mergedCount = mergedArticles.length;
+    }
   }
 
   const resultPayload = {
     status: 'success',
     category: displayCategory,
     country: targetCountry,
-    isMerged: isIndia,
+    language: targetLang,
+    isMerged: targetLang === 'en' && isIndia,
     totalResults,
     page: Number(page),
     pageSize: Number(pageSize),
@@ -435,17 +453,21 @@ async function fetchAndCacheCategory(category = 'all', page = 1, pageSize = 12, 
  * @param {number} pageSize
  * @param {string} country
  * @param {boolean} forceRefresh
+ * @param {string} lang - Language code ('en', 'hi', 'te')
  * @returns {Promise<Object>}
  */
-async function getNewsByCategory(category = 'all', page = 1, pageSize = 12, country = null, forceRefresh = false) {
+async function getNewsByCategory(category = 'all', page = 1, pageSize = 12, country = null, forceRefresh = false, lang = 'en') {
   const targetCountry = (country || process.env.COUNTRY_CODE || 'in').toLowerCase().trim();
+  const targetLang = (lang || 'en').toLowerCase().trim();
   const rawCategory = (category || 'all').toLowerCase().trim();
   const displayCategory = rawCategory === 'general' ? 'world' : rawCategory;
 
   const isIndia = targetCountry === 'in';
-  const queryKey = isIndia
-    ? `category:${displayCategory}:country:in:merged:page:${page}:ps:${pageSize}`
-    : `category:${displayCategory}:country:${targetCountry}:page:${page}:ps:${pageSize}`;
+  const queryKey = (targetLang !== 'en')
+    ? `category:${displayCategory}:country:in:lang:${targetLang}:page:${page}:ps:${pageSize}`
+    : (isIndia
+        ? `category:${displayCategory}:country:in:lang:en:merged:page:${page}:ps:${pageSize}`
+        : `category:${displayCategory}:country:${targetCountry}:lang:en:page:${page}:ps:${pageSize}`);
 
   // 1. Check MySQL Cache unless forcing refresh
   let cached = null;
@@ -461,9 +483,9 @@ async function getNewsByCategory(category = 'all', page = 1, pageSize = 12, coun
   }
 
   try {
-    return await fetchAndCacheCategory(category, page, pageSize, targetCountry);
+    return await fetchAndCacheCategory(category, page, pageSize, targetCountry, targetLang);
   } catch (error) {
-    console.error(`News fetch failed for ${category}/${targetCountry}:`, error.message);
+    console.error(`News fetch failed for ${category}/${targetCountry} [${targetLang}]:`, error.message);
 
     if (!cached) {
       cached = await getCachedData(queryKey);

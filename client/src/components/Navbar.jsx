@@ -33,6 +33,7 @@ import { useAuth } from '../context/AuthContext';
 import { useBookmarks } from '../context/BookmarkContext';
 import { useTheme } from '../context/ThemeContext';
 import { useCountry } from '../context/CountryContext';
+import LanguageSelector from './LanguageSelector';
 
 export default function Navbar() {
   const { user, isAuthenticated, logout } = useAuth();
@@ -186,7 +187,7 @@ export default function Navbar() {
           </NavLink>
         </nav>
 
-        {/* Right Actions: Search, Edition Selector, Theme Toggle & User Auth */}
+        {/* Right Actions: Search, Language, Edition Selector, Theme Toggle & User Auth */}
         <div className="nav-actions">
           {/* Quick Search Button */}
           <Link
@@ -197,6 +198,9 @@ export default function Navbar() {
           >
             <Search size={18} />
           </Link>
+
+          {/* Language Selector Dropdown */}
+          <LanguageSelector variant="dropdown" />
 
           {/* Secondary Regional Edition Selector */}
           <div className="country-menu-wrapper" ref={countryMenuRef} style={{ position: 'relative' }}>
@@ -450,6 +454,14 @@ export default function Navbar() {
             <Search size={18} />
             <span>Search Articles</span>
           </NavLink>
+
+          {/* Mobile Language Selector */}
+          <div style={{ marginTop: '0.75rem', paddingTop: '0.75rem', borderTop: '1px solid var(--border-subtle)' }}>
+            <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)', display: 'block', marginBottom: '0.5rem', fontWeight: 600 }}>
+              CONTENT LANGUAGE
+            </span>
+            <LanguageSelector variant="buttons" onSelect={() => setMobileMenuOpen(false)} />
+          </div>
 
           <div style={{ marginTop: '0.75rem', paddingTop: '0.75rem', borderTop: '1px solid var(--border-subtle)' }}>
             <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)', display: 'block', marginBottom: '0.5rem', fontWeight: 600 }}>

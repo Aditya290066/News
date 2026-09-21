@@ -59,9 +59,10 @@ function normalizeNewsDataArticle(raw, fallbackCategory = 'general') {
  * 
  * @param {string} category - Target category
  * @param {string} country - Country code (defaults to 'in')
+ * @param {string} language - Language code ('en', 'hi', 'te') (defaults to 'en')
  * @returns {Promise<{ articles: Object[], totalResults: number, provider: string, count: number }>}
  */
-async function fetchNewsData(category = 'all', country = 'in') {
+async function fetchNewsData(category = 'all', country = 'in', language = 'en') {
   const apiKey = process.env.NEWSDATA_API_KEY || 'pub_70f637ba62d84bc2ae0610f1af31d8b6';
 
   if (!apiKey || apiKey === 'your_newsdata_key_here' || apiKey.trim() === '') {
@@ -78,12 +79,13 @@ async function fetchNewsData(category = 'all', country = 'in') {
   const rawCat = (category || 'all').toLowerCase().trim();
   const apiCategory = NEWSDATA_CATEGORY_MAP[rawCat] || 'top';
   const displayCategory = rawCat === 'general' ? 'world' : rawCat;
+  const targetLanguage = (language || 'en').toLowerCase().trim();
 
   try {
     const params = {
       apikey: apiKey.trim(),
       country: country.toLowerCase().trim(),
-      language: 'en'
+      language: targetLanguage
     };
 
     if (apiCategory) {
