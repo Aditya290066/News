@@ -15,6 +15,14 @@
  */
 
 const { fetchAndCacheCategory } = require('../services/newsService');
+const logger = require('../utils/logger');
+
+// Store last successful refresh timestamp in memory
+let lastSuccessfulRefresh = null;
+
+function getLastRefreshTimestamp() {
+  return lastSuccessfulRefresh;
+}
 
 // All supported categories to refresh
 const CATEGORIES_TO_REFRESH = [
@@ -41,7 +49,7 @@ const delay = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
  */
 async function refreshAllNews(country = 'in') {
   const targetCountry = (country || process.env.COUNTRY_CODE || 'in').toLowerCase().trim();
-  console.log(`\n[cron] Starting scheduled news cache refresh across ${CATEGORIES_TO_REFRESH.length} categories for [${targetCountry.toUpperCase()}]...`);
+  logger.info(`Starting scheduled news cache refresh across ${CATEGORIES_TO_REFRESH.length} categories for [${targetCountry.toUpperCase()}]`);
   const startTime = Date.now();
 
   const results = {
@@ -113,12 +121,16 @@ async function refreshAllNews(country = 'in') {
   }
 
   const durationSec = ((Date.now() - startTime) / 1000).toFixed(1);
-  console.log(`[cron] News refresh complete in ${durationSec}s. Succeeded: ${results.successful.length}, Failed: ${results.failed.length}\n`);
+  if (results.successful.length > 0) {
+    lastSuccessfulRefresh = new Date().toISOString();
+  }
+  logger.info(`News refresh complete in ${durationSec}s. Succeeded: ${results.successful.length}, Failed: ${results.failed.length}`);
 
   return results;
 }
 
 module.exports = {
   refreshAllNews,
-  CATEGORIES_TO_REFRESH
+  CATEGORIES_TO_REFRESH,
+  getLastRefreshTimestamp
 };

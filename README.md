@@ -137,3 +137,46 @@ User bookmarks collection:
 - **Saved Articles (Bookmarks)**: Synchronized with MySQL backend, providing instant bookmarking and one-click removal.
 - **Loading Skeletons**: Shimmer placeholders matching card dimensions to eliminate Cumulative Layout Shifts (CLS).
 - **Responsive Design**: Fluid CSS grid adapting from mobile screens to wide desktop monitors.
+
+---
+
+## 🚀 Deployment
+
+When deploying ANEWS to production hosting environments (e.g. Vercel, Render, Railway, AWS, DigitalOcean), set the following environment variables:
+
+### Backend Environment Variables (`/server` or Hosting Environment)
+
+| Variable | Description | Example / Default |
+|---|---|---|
+| `PORT` | HTTP port the server listens on | `5001` or `5000` |
+| `NODE_ENV` | Runtime environment | `production` |
+| `NEWS_API_KEY` | Primary API Key from [NewsAPI.org](https://newsapi.org/register) | `your_newsapi_key` |
+| `NEWSDATA_API_KEY` | Secondary API Key from [NewsData.io](https://newsdata.io/register) | `your_newsdata_key` |
+| `COUNTRY_CODE` | Primary default country edition (`in` for India) | `in` |
+| `CLIENT_URL` | Frontend domain(s) for CORS access (comma-separated if multiple) | `https://your-domain.vercel.app` |
+| `DB_HOST` | MySQL database host address | `localhost` or cloud DB endpoint |
+| `DB_PORT` | MySQL connection port | `3306` |
+| `DB_USER` | MySQL database user | `root` or cloud user |
+| `DB_PASSWORD` | MySQL database password | `your_password` |
+| `DB_NAME` | MySQL database name | `real_news_db` |
+| `JWT_SECRET` | Cryptographic secret key for signing user auth tokens | Strong 64-char random string |
+| `REFRESH_INTERVAL_MINUTES` | Background news cache refresh interval in minutes (safeguarding quotas) | `60` |
+| `LOG_LEVEL` | Winston logging level (`info`, `warn`, `error`, `debug`) | `info` |
+
+### Frontend Environment Variables (`/client` or Vercel Frontend)
+
+| Variable | Description | Example / Default |
+|---|---|---|
+| `VITE_API_URL` | Base URL of the backend REST API | `/api` (if proxied/rewritten) or `https://api.your-domain.com/api` |
+| `VITE_BACKEND_URL` | Development proxy target for Vite dev server | `http://localhost:5001` |
+
+### Production Build Verification
+
+To confirm that the frontend production bundle builds cleanly without errors:
+
+```bash
+npm --prefix client run build
+```
+
+This generates an optimized, code-split `/client/dist` directory ready for static hosting.
+

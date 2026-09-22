@@ -6,11 +6,13 @@
 
 const express = require('express');
 const { testConnection } = require('../config/db');
+const { getLastRefreshTimestamp } = require('../jobs/refreshNews');
 
 const router = express.Router();
 
 router.get('/', async (req, res) => {
   const isDbHealthy = await testConnection();
+  const lastNewsRefresh = getLastRefreshTimestamp();
 
   const healthData = {
     status: isDbHealthy ? 'healthy' : 'degraded',
@@ -20,6 +22,7 @@ router.get('/', async (req, res) => {
       server: 'online',
       database: isDbHealthy ? 'connected' : 'disconnected'
     },
+    lastNewsRefresh: lastNewsRefresh || 'Pending first cycle or startup warm-up',
     version: '1.0.0'
   };
 

@@ -4,22 +4,34 @@
  * Enforces light theme across the application.
  */
 
-import React, { createContext, useContext, useEffect } from 'react';
+import React, { createContext, useContext, useState, useEffect } from 'react';
 
 const ThemeContext = createContext(null);
 
 export function ThemeProvider({ children }) {
-  useEffect(() => {
-    document.documentElement.setAttribute('data-theme', 'light');
+  const [theme, setTheme] = useState(() => {
     try {
-      localStorage.setItem('news_theme', 'light');
+      return localStorage.getItem('news_theme') || 'light';
+    } catch (e) {
+      return 'light';
+    }
+  });
+
+  useEffect(() => {
+    document.documentElement.setAttribute('data-theme', theme);
+    try {
+      localStorage.setItem('news_theme', theme);
     } catch (e) {
       // safe fallback
     }
-  }, []);
+  }, [theme]);
+
+  const toggleTheme = () => {
+    setTheme((prev) => (prev === 'light' ? 'dark' : 'light'));
+  };
 
   return (
-    <ThemeContext.Provider value={{ theme: 'light', toggleTheme: () => {}, isDark: false }}>
+    <ThemeContext.Provider value={{ theme, toggleTheme, isDark: theme === 'dark' }}>
       {children}
     </ThemeContext.Provider>
   );

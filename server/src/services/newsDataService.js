@@ -27,6 +27,16 @@ const NEWSDATA_CATEGORY_MAP = {
   all: 'top,technology,sports'
 };
 
+function generateArticleId(url = '') {
+  try {
+    return Buffer.from(encodeURIComponent(url || ''))
+      .toString('base64url')
+      .replace(/=+$/, '');
+  } catch {
+    return Buffer.from(url || '').toString('base64url');
+  }
+}
+
 /**
  * Normalizes an article object from NewsData.io into the standard shape
  * @param {Object} raw
@@ -42,10 +52,13 @@ function normalizeNewsDataArticle(raw, fallbackCategory = 'general') {
     }
   }
 
+  const articleUrl = raw.link || raw.url;
+
   return {
+    id: generateArticleId(articleUrl),
     title: raw.title ? raw.title.trim() : 'Untitled Story',
     description: raw.description ? raw.description.trim() : (raw.content ? raw.content.slice(0, 200).trim() : 'No description available for this story.'),
-    url: raw.link || raw.url,
+    url: articleUrl,
     imageUrl: raw.image_url || null,
     sourceName: raw.source_name || raw.source_id || 'India Wire',
     category: fallbackCategory,

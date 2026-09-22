@@ -73,4 +73,31 @@ router.get('/search', async (req, res, next) => {
   }
 });
 
+/**
+ * GET /api/news/article/:id
+ * Retrieves article details and related stories by unique article ID
+ */
+router.get('/article/:id', async (req, res, next) => {
+  try {
+    const { id } = req.params;
+    const { getArticleById } = require('../services/newsService');
+    const result = await getArticleById(id);
+
+    if (!result.article) {
+      return res.status(404).json({
+        status: 'error',
+        message: 'Article not found.'
+      });
+    }
+
+    res.json({
+      status: 'success',
+      article: result.article,
+      related: result.related || []
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
 module.exports = router;

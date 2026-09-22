@@ -3,6 +3,7 @@
  * 
  * Entry point for the backend REST API.
  * Performs pre-flight checks on environment and credentials before boot.
+ * Incorporates Winston structured logging and Express rate limiting.
  */
 
 const fs = require('fs');
@@ -21,20 +22,11 @@ if (fs.existsSync(envPath)) {
   dotenv.config();
 }
 
+const logger = require('./src/utils/logger');
+
 const newsApiKey = process.env.NEWS_API_KEY;
 if (!newsApiKey || newsApiKey === 'your_newsapi_key_here' || newsApiKey.trim() === '') {
-  console.error(`
-\x1b[31m\x1b[1m╔═════════════════════════════════════════════════════════════════════════════╗
-║                      ⚠️   MISSING NEWSAPI.ORG KEY                           ║
-╠═════════════════════════════════════════════════════════════════════════════╣
-║  A valid NEWS_API_KEY was not found in server/.env!                         ║
-║                                                                             ║
-║  1. Obtain a free API key at: \x1b[34mhttps://newsapi.org/register\x1b[31m\x1b[1m                  ║
-║  2. Run the interactive setup script:                                       ║
-║                                                                             ║
-║    👉  \x1b[33m\x1b[1mnpm run setup\x1b[31m\x1b[1m                                                            ║
-╚═════════════════════════════════════════════════════════════════════════════╝\x1b[0m
-`);
+  logger.error('A valid NEWS_API_KEY was not found in server/.env or environment variables!');
   process.exit(1);
 }
 
@@ -43,7 +35,7 @@ if (!newsApiKey || newsApiKey === 'your_newsapi_key_here' || newsApiKey.trim() =
 // -------------------------------------------------------------
 const express = require('express');
 const cors = require('cors');
-const morgan = require('morgan');
+const rateLimit = require('express-rate-limit');
 
 const { testConnection } = require('./src/config/db');
 const { initScheduler } = require('./src/jobs/scheduler');
@@ -54,20 +46,77 @@ const healthRoutes = require('./src/routes/healthRoutes');
 const { errorHandler, notFoundHandler } = require('./src/middleware/errorHandler');
 
 const app = express();
-const PORT = process.env.PORT || 5000;
-const CLIENT_URL = process.env.CLIENT_URL || 'http://localhost:5173';
+const PORT = process.env.PORT || 5001;
 
 // -------------------------------------------------------------
-// Middleware Configuration
+// CORS Configuration (Production & Development Readiness)
 // -------------------------------------------------------------
+const clientUrlEnv = process.env.CLIENT_URL || 'http://localhost:5173';
+const allowedOrigins = [
+  ...clientUrlEnv.split(',').map(url => url.trim().replace(/\/$/, '')),
+  'http://localhost:5173',
+  'http://127.0.0.1:5173'
+];
+
 app.use(cors({
-  origin: [CLIENT_URL, 'http://localhost:5173', 'http://127.0.0.1:5173'],
+  origin: (origin, callback) => {
+    // Allow requests with no origin (like mobile apps or curl) or if origin in allowed list
+    if (!origin || allowedOrigins.includes(origin) || process.env.NODE_ENV !== 'production') {
+      return callback(null, true);
+    }
+    return callback(new Error(`CORS blocked request from origin: ${origin}`));
+  },
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization']
 }));
 
-app.use(morgan('dev'));
+// -------------------------------------------------------------
+// Rate Limiting Protection Middleware
+// -------------------------------------------------------------
+// General API Rate Limiter: 150 requests per 15 minutes per IP
+const generalLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 150,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: {
+    status: 'error',
+    message: 'Too many requests from this IP. Please try again after 15 minutes.'
+  }
+});
+
+// Strict Auth Rate Limiter: 30 requests per 15 minutes per IP
+const authLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 30,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: {
+    status: 'error',
+    message: 'Too many authentication attempts. Please try again after 15 minutes.'
+  }
+});
+
+app.use('/api/', generalLimiter);
+app.use('/api/auth/', authLimiter);
+
+// -------------------------------------------------------------
+// Request Logging & Body Parsing
+// -------------------------------------------------------------
+app.use((req, res, next) => {
+  const start = Date.now();
+  res.on('finish', () => {
+    const duration = Date.now() - start;
+    if (res.statusCode >= 400) {
+      logger.warn(`${req.method} ${req.originalUrl} ${res.statusCode} (${duration}ms)`);
+    } else {
+      logger.info(`${req.method} ${req.originalUrl} ${res.statusCode} (${duration}ms)`);
+    }
+  });
+  next();
+});
+
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
@@ -82,11 +131,12 @@ app.use('/api/bookmarks', bookmarkRoutes);
 // Root greeting route
 app.get('/', (req, res) => {
   res.json({
-    name: 'Real News API',
+    name: 'ANEWS Editorial REST API',
     version: '1.0.0',
     status: 'online',
     endpoints: {
-      news: '/api/news?category=technology|sports',
+      news: '/api/news?category=technology|sports|business|world',
+      article: '/api/news/article/:id',
       search: '/api/news/search?q=&category=',
       auth: {
         register: 'POST /api/auth/register',
@@ -107,15 +157,15 @@ app.use(errorHandler);
 // Server Boot & Database Verification
 // -------------------------------------------------------------
 const server = app.listen(PORT, async () => {
-  console.log(`\n\x1b[32m\x1b[1m✔ Real News Backend running on http://localhost:${PORT}\x1b[0m`);
-  console.log(`  Target Client URL: ${CLIENT_URL}`);
-  
+  logger.info(`ANEWS Backend running on port ${PORT}`);
+  logger.info(`Allowed Client Origins: ${allowedOrigins.join(', ')}`);
+
   // Verify database connectivity
   const dbConnected = await testConnection();
   if (dbConnected) {
-    console.log(`\x1b[32m✔ MySQL Database connection established successfully.\x1b[0m\n`);
+    logger.info('MySQL Database connection established successfully.');
   } else {
-    console.warn(`\x1b[33m⚠️  Warning: MySQL connection could not be established. Ensure MySQL is running.\x1b[0m\n`);
+    logger.warn('MySQL connection could not be established. Ensure MySQL is running.');
   }
 
   // Initialize automated background news refresh cron scheduler

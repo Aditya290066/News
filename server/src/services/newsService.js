@@ -33,6 +33,16 @@ const CATEGORY_MAP = {
   all: 'all'
 };
 
+function generateArticleId(url = '') {
+  try {
+    return Buffer.from(encodeURIComponent(url || ''))
+      .toString('base64url')
+      .replace(/=+$/, '');
+  } catch {
+    return Buffer.from(url || '').toString('base64url');
+  }
+}
+
 /**
  * Normalizes raw article objects from NewsAPI into a consistent shape
  * @param {Object} rawArticle
@@ -40,10 +50,12 @@ const CATEGORY_MAP = {
  * @returns {Object}
  */
 function normalizeArticle(rawArticle, fallbackCategory = 'technology') {
+  const articleUrl = rawArticle.url;
   return {
+    id: generateArticleId(articleUrl),
     title: rawArticle.title ? rawArticle.title.trim() : 'Untitled Story',
     description: rawArticle.description ? rawArticle.description.trim() : (rawArticle.content ? rawArticle.content.slice(0, 200).trim() : 'No description available for this article.'),
-    url: rawArticle.url,
+    url: articleUrl,
     imageUrl: rawArticle.urlToImage || null,
     sourceName: rawArticle.source?.name || 'News Wire',
     category: rawArticle.category || fallbackCategory,
@@ -610,11 +622,97 @@ async function searchNews(q = '', category = '', page = 1, pageSize = 12, countr
   }
 }
 
+/**
+ * Looks up an article by its unique ID across MySQL cache, memory cache, or decoded URL
+ * @param {string} id
+ * @returns {Promise<{ article: Object|null, related: Object[] }>}
+ */
+async function getArticleById(id) {
+  if (!id) return { article: null, related: [] };
+
+  let targetArticle = null;
+
+  // 1. Search in-memory cache
+  for (const cacheItem of memoryCache.values()) {
+    const list = cacheItem?.data?.articles || [];
+    const found = list.find(a => a.id === id || generateArticleId(a.url) === id);
+    if (found) {
+      targetArticle = found;
+      break;
+    }
+  }
+
+  // 2. Search MySQL cache if not found in memory
+  if (!targetArticle) {
+    try {
+      const [rows] = await pool.execute(
+        'SELECT response_json FROM news_cache ORDER BY fetched_at DESC LIMIT 20'
+      );
+
+      for (const row of rows) {
+        try {
+          const parsed = JSON.parse(row.response_json);
+          const list = parsed.articles || [];
+          const found = list.find(a => a.id === id || generateArticleId(a.url) === id);
+          if (found) {
+            targetArticle = found;
+            break;
+          }
+        } catch {
+          // ignore parsing error for single record
+        }
+      }
+    } catch (e) {
+      // Safe non-fatal fallback
+    }
+  }
+
+  // 3. Fallback: decode URL from ID if reversible
+  if (!targetArticle) {
+    try {
+      let base64 = id.replace(/-/g, '+').replace(/_/g, '/');
+      while (base64.length % 4) base64 += '=';
+      const decodedUrl = decodeURIComponent(Buffer.from(base64, 'base64').toString('utf8'));
+      if (decodedUrl && decodedUrl.startsWith('http')) {
+        targetArticle = {
+          id,
+          title: 'Wire Story Coverage',
+          description: 'This news report was retrieved from the live news wire.',
+          url: decodedUrl,
+          sourceName: 'News Wire',
+          category: 'general',
+          publishedAt: new Date().toISOString()
+        };
+      }
+    } catch {
+      // safe fallback
+    }
+  }
+
+  // 4. Fetch related stories from the same category
+  let related = [];
+  if (targetArticle) {
+    const cat = targetArticle.category || 'general';
+    try {
+      const catNews = await getNewsByCategory(cat, 1, 5);
+      related = (catNews.articles || [])
+        .filter(a => a.url !== targetArticle.url)
+        .slice(0, 4);
+    } catch {
+      related = [];
+    }
+  }
+
+  return { article: targetArticle, related };
+}
+
 module.exports = {
   fetchAndCacheCategory,
   getNewsByCategory,
   searchNews,
   getCachedData,
   setCachedData,
-  mergeAndDeduplicate
+  mergeAndDeduplicate,
+  getArticleById,
+  generateArticleId
 };
