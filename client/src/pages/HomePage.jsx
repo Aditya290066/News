@@ -78,14 +78,6 @@ export default function HomePage() {
         worldPromise
       ]);
 
-      if (mainRes.status === 'fulfilled' && mainRes.value.data?.status === 'success') {
-        const fetched = mainRes.value.data.articles || [];
-        setMainFeed(fetched);
-        setIsStaleFallback(!!mainRes.value.data.staleFallback);
-      } else {
-        throw new Error(mainRes.reason?.response?.data?.message || 'Failed to fetch headlines.');
-      }
-
       if (techRes.status === 'fulfilled' && techRes.value.data?.status === 'success') {
         setTechNews(techRes.value.data.articles || []);
       }
@@ -97,6 +89,27 @@ export default function HomePage() {
       }
       if (worldRes.status === 'fulfilled' && worldRes.value.data?.status === 'success') {
         setWorldNews(worldRes.value.data.articles || []);
+      }
+
+      if (mainRes.status === 'fulfilled' && mainRes.value.data?.status === 'success' && Array.isArray(mainRes.value.data.articles) && mainRes.value.data.articles.length > 0) {
+        const fetched = mainRes.value.data.articles;
+        setMainFeed(fetched);
+        setIsStaleFallback(!!mainRes.value.data.staleFallback);
+      } else {
+        // Collect articles from whichever categories succeeded
+        const alternateArticles = [
+          ...(techRes.status === 'fulfilled' && techRes.value.data?.articles ? techRes.value.data.articles : []),
+          ...(businessRes.status === 'fulfilled' && businessRes.value.data?.articles ? businessRes.value.data.articles : []),
+          ...(worldRes.status === 'fulfilled' && worldRes.value.data?.articles ? worldRes.value.data.articles : []),
+          ...(sportsRes.status === 'fulfilled' && sportsRes.value.data?.articles ? sportsRes.value.data.articles : [])
+        ];
+
+        if (alternateArticles.length > 0) {
+          setMainFeed(alternateArticles);
+          setIsStaleFallback(true);
+        } else {
+          throw new Error(mainRes.reason?.response?.data?.message || 'Failed to fetch headlines.');
+        }
       }
     } catch (err) {
       console.error('Failed to load editorial homepage:', err);

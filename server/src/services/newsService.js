@@ -11,7 +11,7 @@
  */
 
 const axios = require('axios');
-const { pool } = require('../config/db');
+const { pool, isDbAvailable } = require('../config/db');
 const { fetchNewsData } = require('./newsDataService');
 const { getFallbackArticles } = require('./fallbackArticles');
 
@@ -140,43 +140,47 @@ const memoryCache = new Map();
  * @returns {Promise<Object|null>}
  */
 async function getCachedData(queryKey) {
-  try {
-    const [rows] = await pool.execute(
-      `SELECT response_json, fetched_at, 
-              TIMESTAMPDIFF(SECOND, fetched_at, NOW()) AS age_seconds 
-       FROM news_cache 
-       WHERE query_key = ?`,
-      [queryKey]
-    );
+  if (isDbAvailable) {
+    try {
+      const [rows] = await pool.execute(
+        `SELECT response_json, fetched_at, 
+                TIMESTAMPDIFF(SECOND, fetched_at, NOW()) AS age_seconds 
+         FROM news_cache 
+         WHERE query_key = ?`,
+        [queryKey]
+      );
 
-    if (rows.length > 0) {
-      const record = rows[0];
-      const parsedData = JSON.parse(record.response_json);
-      const hasArticles = Array.isArray(parsedData.articles) && parsedData.articles.length > 0;
-      const isFresh = record.age_seconds !== null && record.age_seconds < CACHE_TTL_SECONDS && hasArticles;
+      if (rows.length > 0) {
+        const record = rows[0];
+        const parsedData = JSON.parse(record.response_json);
+        const hasArticles = Array.isArray(parsedData.articles) && parsedData.articles.length > 0;
+        const isFresh = record.age_seconds !== null && record.age_seconds < CACHE_TTL_SECONDS && hasArticles;
 
-      return {
-        isFresh,
-        data: parsedData,
-        fetchedAt: record.fetched_at,
-        ageSeconds: record.age_seconds,
-        hasArticles
-      };
+        return {
+          isFresh,
+          data: parsedData,
+          fetchedAt: record.fetched_at,
+          ageSeconds: record.age_seconds,
+          hasArticles
+        };
+      }
+    } catch (error) {
+      // Fall through to in-memory cache
     }
-  } catch (error) {
-    // Graceful fallback to in-memory cache when MySQL is not running or in cloud serverless
-    const memRecord = memoryCache.get(queryKey);
-    if (memRecord) {
-      const ageSeconds = Math.floor((Date.now() - memRecord.timestamp) / 1000);
-      const hasArticles = Array.isArray(memRecord.data?.articles) && memRecord.data.articles.length > 0;
-      return {
-        isFresh: ageSeconds < CACHE_TTL_SECONDS && hasArticles,
-        data: memRecord.data,
-        fetchedAt: new Date(memRecord.timestamp),
-        ageSeconds,
-        hasArticles
-      };
-    }
+  }
+
+  // Graceful fallback to in-memory cache when MySQL is not running or in cloud serverless
+  const memRecord = memoryCache.get(queryKey);
+  if (memRecord) {
+    const ageSeconds = Math.floor((Date.now() - memRecord.timestamp) / 1000);
+    const hasArticles = Array.isArray(memRecord.data?.articles) && memRecord.data.articles.length > 0;
+    return {
+      isFresh: ageSeconds < CACHE_TTL_SECONDS && hasArticles,
+      data: memRecord.data,
+      fetchedAt: new Date(memRecord.timestamp),
+      ageSeconds,
+      hasArticles
+    };
   }
   return null;
 }
@@ -196,20 +200,22 @@ async function setCachedData(category, queryKey, responseData) {
   // Always keep in-memory cache updated
   memoryCache.set(queryKey, { data: responseData, timestamp: Date.now() });
 
-  try {
-    const jsonString = JSON.stringify(responseData);
-    await pool.execute(
-      `INSERT INTO news_cache (category, query_key, response_json, fetched_at)
-       VALUES (?, ?, ?, NOW())
-       ON DUPLICATE KEY UPDATE
-         category = VALUES(category),
-         response_json = VALUES(response_json),
-         fetched_at = NOW()`,
-      [category || 'general', queryKey, jsonString]
-    );
-  } catch (error) {
-    // Non-fatal: in-memory cache already stores the fresh articles
-    console.warn('MySQL cache write skipped (in-memory cache active):', error.message);
+  if (isDbAvailable) {
+    try {
+      const jsonString = JSON.stringify(responseData);
+      await pool.execute(
+        `INSERT INTO news_cache (category, query_key, response_json, fetched_at)
+         VALUES (?, ?, ?, NOW())
+         ON DUPLICATE KEY UPDATE
+           category = VALUES(category),
+           response_json = VALUES(response_json),
+           fetched_at = NOW()`,
+        [category || 'general', queryKey, jsonString]
+      );
+    } catch (error) {
+      // Non-fatal: in-memory cache already stores the fresh articles
+      console.warn('MySQL cache write skipped (in-memory cache active):', error.message);
+    }
   }
 }
 
@@ -424,15 +430,12 @@ async function fetchAndCacheCategory(category = 'all', page = 1, pageSize = 12, 
       };
     }
 
-    // Only inject English curated fallback stories for English queries
-    // For Hindi/Telugu, preserve empty state so frontend can show friendly low-coverage notice
-    if (targetLang === 'en') {
-      console.warn(`[newsService] Providing curated stories for ${displayCategory}/${targetCountry} (en)`);
-      mergedArticles = getFallbackArticles(displayCategory, pageSize);
-      totalResults = mergedArticles.length;
-      stats.curatedFallback = true;
-      stats.mergedCount = mergedArticles.length;
-    }
+    // Guaranteed fallback: always provide curated fallback stories so frontend never shows empty state
+    console.warn(`[newsService] Providing curated stories for ${displayCategory}/${targetCountry} [${targetLang}]`);
+    mergedArticles = getFallbackArticles(displayCategory, pageSize);
+    totalResults = mergedArticles.length;
+    stats.curatedFallback = true;
+    stats.mergedCount = mergedArticles.length;
   }
 
   const resultPayload = {
@@ -448,7 +451,7 @@ async function fetchAndCacheCategory(category = 'all', page = 1, pageSize = 12, 
     stats
   };
 
-  // Store in MySQL cache
+  // Store in MySQL or in-memory cache
   await setCachedData(displayCategory, queryKey, resultPayload);
 
   return {
@@ -502,7 +505,7 @@ async function getNewsByCategory(category = 'all', page = 1, pageSize = 12, coun
     if (!cached) {
       cached = await getCachedData(queryKey);
     }
-    if (cached && cached.data) {
+    if (cached && cached.data && Array.isArray(cached.data.articles) && cached.data.articles.length > 0) {
       return {
         ...cached.data,
         cached: true,
@@ -510,7 +513,22 @@ async function getNewsByCategory(category = 'all', page = 1, pageSize = 12, coun
         cacheAgeSeconds: cached.ageSeconds
       };
     }
-    throw new Error(`Failed to retrieve news: ${error.message}`);
+
+    // Guaranteed fallback: return curated fallback articles so users always see news
+    console.warn(`[newsService] Outage fallback active for ${displayCategory}`);
+    const fallbackArticles = getFallbackArticles(displayCategory, pageSize);
+    return {
+      status: 'success',
+      category: displayCategory,
+      country: targetCountry,
+      language: targetLang,
+      totalResults: fallbackArticles.length,
+      page: Number(page),
+      pageSize: Number(pageSize),
+      articles: fallbackArticles,
+      cached: false,
+      staleFallback: true
+    };
   }
 }
 
