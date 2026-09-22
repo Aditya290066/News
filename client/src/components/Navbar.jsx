@@ -138,31 +138,22 @@ export default function Navbar() {
       {/* 2. Main Sticky Navbar */}
       <nav className="navbar" aria-label="Main Navigation">
         <div className="container navbar-inner">
-          {/* Brand Logo - BBC/Reuters Editorial Style */}
+          {/* Brand Logo */}
           <Link to="/" className="nav-brand" aria-label="ANEWS Home">
-            <div style={{ 
-              background: 'var(--brand-red)', 
-              color: '#ffffff', 
-              fontWeight: 900, 
-              fontSize: '1.25rem', 
-              letterSpacing: '-0.03em', 
-              padding: '2px 8px', 
-              borderRadius: '2px', 
-              display: 'inline-flex', 
-              alignItems: 'center', 
-              justifyContent: 'center',
-              fontFamily: 'var(--font-serif)'
-            }}>
-              A
-            </div>
+            <img 
+              src="/anews-circle-logo.png" 
+              alt="ANEWS Logo" 
+              className="brand-logo-circle" 
+            />
             <div className="brand-text-block">
-              <span className="brand-title" style={{ fontFamily: 'var(--font-serif)', letterSpacing: '-0.02em' }}>
-                A<span style={{ color: 'var(--brand-red)' }}>NEWS</span>
+              <span className="brand-title">
+                A<span className="brand-accent">NEWS</span>
               </span>
-              <span className="brand-sub" style={{ letterSpacing: '0.08em', fontSize: '0.62rem' }}>
-                GLOBAL EDITORIAL
+              <span className="brand-sub">
+                NEWS BEYOND BORDERS
               </span>
             </div>
+            <span className="brand-pill">LIVE</span>
           </Link>
 
           {/* Desktop Category Navigation */}

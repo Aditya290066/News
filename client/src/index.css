@@ -343,7 +343,7 @@ input, textarea, select {
 }
 
 .brand-title {
-  font-family: var(--font-heading);
+  font-family: var(--font-sans);
   font-weight: 800;
   font-size: 1.25rem;
   letter-spacing: -0.02em;
