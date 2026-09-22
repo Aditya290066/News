@@ -28,6 +28,7 @@ import SidebarTrending from '../components/SidebarTrending';
 import SidebarLiveTicker from '../components/SidebarLiveTicker';
 import SectionRail from '../components/SectionRail';
 import { HeroSkeleton, SecondarySkeleton, SidebarSkeleton, RailSkeleton } from '../components/LoadingSkeleton';
+import { getClientFallbackArticles } from '../data/fallbackNews';
 
 export default function HomePage() {
   const { country, activeCountry } = useCountry();
@@ -96,7 +97,7 @@ export default function HomePage() {
         setMainFeed(fetched);
         setIsStaleFallback(!!mainRes.value.data.staleFallback);
       } else {
-        // Collect articles from whichever categories succeeded
+        // Collect articles from whichever categories succeeded, or use curated fallback
         const alternateArticles = [
           ...(techRes.status === 'fulfilled' && techRes.value.data?.articles ? techRes.value.data.articles : []),
           ...(businessRes.status === 'fulfilled' && businessRes.value.data?.articles ? businessRes.value.data.articles : []),
@@ -108,12 +109,19 @@ export default function HomePage() {
           setMainFeed(alternateArticles);
           setIsStaleFallback(true);
         } else {
-          throw new Error(mainRes.reason?.response?.data?.message || 'Failed to fetch headlines.');
+          // Gracefully load client curated fallback articles
+          const curatedFallback = getClientFallbackArticles('all', 16);
+          setMainFeed(curatedFallback);
+          setIsStaleFallback(true);
         }
       }
     } catch (err) {
-      console.error('Failed to load editorial homepage:', err);
-      setError(err.response?.data?.message || err.message || 'Unable to connect to news wire.');
+      console.warn('News wire connection notice:', err.message);
+      // Ensure the user always sees stories
+      const curatedFallback = getClientFallbackArticles('all', 16);
+      setMainFeed(curatedFallback);
+      setIsStaleFallback(true);
+      setError(null);
     } finally {
       setLoading(false);
     }
@@ -131,10 +139,10 @@ export default function HomePage() {
   const tickerStories = mainFeed.slice(4, 10);
 
   // Fallbacks for rails if category endpoints returned fewer items
-  const displayTech = techNews.length > 0 ? techNews : mainFeed.filter(a => (a.category || '').toLowerCase().includes('tech')).slice(0, 4);
-  const displaySports = sportsNews.length > 0 ? sportsNews : mainFeed.filter(a => (a.category || '').toLowerCase().includes('sport')).slice(0, 4);
-  const displayBusiness = businessNews.length > 0 ? businessNews : mainFeed.filter(a => (a.category || '').toLowerCase().includes('busin')).slice(0, 4);
-  const displayWorld = worldNews.length > 0 ? worldNews : mainFeed.filter(a => (a.category || '').toLowerCase().includes('world') || (a.category || '').toLowerCase().includes('gen')).slice(0, 4);
+  const displayTech = techNews.length > 0 ? techNews : getClientFallbackArticles('technology', 4);
+  const displaySports = sportsNews.length > 0 ? sportsNews : getClientFallbackArticles('sports', 4);
+  const displayBusiness = businessNews.length > 0 ? businessNews : getClientFallbackArticles('business', 4);
+  const displayWorld = worldNews.length > 0 ? worldNews : getClientFallbackArticles('world', 4);
 
   return (
     <div className="home-page-root">
