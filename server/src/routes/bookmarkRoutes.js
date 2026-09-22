@@ -6,7 +6,7 @@
  */
 
 const express = require('express');
-const { pool } = require('../config/db');
+const { pool, isDbAvailable } = require('../config/db');
 const { requireAuth } = require('../middleware/auth');
 
 const router = express.Router();
@@ -25,31 +25,34 @@ router.get('/', async (req, res, next) => {
   try {
     const userId = req.user.id;
 
-    try {
-      const [rows] = await pool.execute(
-        `SELECT id, user_id, title, description, url, image_url AS imageUrl, 
-                source_name AS sourceName, category, published_at AS publishedAt, 
-                saved_at AS savedAt
-         FROM saved_articles
-         WHERE user_id = ?
-         ORDER BY saved_at DESC`,
-        [userId]
-      );
+    if (isDbAvailable) {
+      try {
+        const [rows] = await pool.execute(
+          `SELECT id, user_id, title, description, url, image_url AS imageUrl, 
+                  source_name AS sourceName, category, published_at AS publishedAt, 
+                  saved_at AS savedAt
+           FROM saved_articles
+           WHERE user_id = ?
+           ORDER BY saved_at DESC`,
+          [userId]
+        );
 
-      return res.json({
-        status: 'success',
-        count: rows.length,
-        bookmarks: rows
-      });
-    } catch (dbErr) {
-      console.warn('MySQL unavailable on GET /bookmarks, using memory fallback:', dbErr.message);
-      const userList = memoryBookmarks.get(userId) || [];
-      return res.json({
-        status: 'success',
-        count: userList.length,
-        bookmarks: userList
-      });
+        return res.json({
+          status: 'success',
+          count: rows.length,
+          bookmarks: rows
+        });
+      } catch (dbErr) {
+        console.warn('MySQL unavailable on GET /bookmarks, using memory fallback:', dbErr.message);
+      }
     }
+
+    const userList = memoryBookmarks.get(userId) || [];
+    return res.json({
+      status: 'success',
+      count: userList.length,
+      bookmarks: userList
+    });
   } catch (error) {
     next(error);
   }
@@ -79,90 +82,92 @@ router.post('/', async (req, res, next) => {
       });
     }
 
-    try {
-      // Format published_at for MySQL DATETIME
-      let formattedPublishedAt = null;
-      if (publishedAt) {
-        const dateObj = new Date(publishedAt);
-        if (!isNaN(dateObj.getTime())) {
-          formattedPublishedAt = dateObj.toISOString().slice(0, 19).replace('T', ' ');
+    if (isDbAvailable) {
+      try {
+        // Format published_at for MySQL DATETIME
+        let formattedPublishedAt = null;
+        if (publishedAt) {
+          const dateObj = new Date(publishedAt);
+          if (!isNaN(dateObj.getTime())) {
+            formattedPublishedAt = dateObj.toISOString().slice(0, 19).replace('T', ' ');
+          }
         }
+
+        // Insert or update on duplicate (user_id, url)
+        const [result] = await pool.execute(
+          `INSERT INTO saved_articles 
+            (user_id, title, description, url, image_url, source_name, category, published_at)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+           ON DUPLICATE KEY UPDATE
+             title = VALUES(title),
+             description = VALUES(description),
+             image_url = VALUES(image_url),
+             source_name = VALUES(source_name),
+             category = VALUES(category),
+             saved_at = CURRENT_TIMESTAMP`,
+          [
+            userId,
+            title,
+            description || '',
+            url,
+            imageUrl || null,
+            sourceName || 'Unknown',
+            category || 'general',
+            formattedPublishedAt
+          ]
+        );
+
+        const bookmarkId = result.insertId || (
+          (await pool.execute('SELECT id FROM saved_articles WHERE user_id = ? AND url = ? LIMIT 1', [userId, url]))[0][0]?.id
+        );
+
+        return res.status(201).json({
+          status: 'success',
+          message: 'Article saved to bookmarks.',
+          bookmark: {
+            id: bookmarkId,
+            userId,
+            title,
+            description,
+            url,
+            imageUrl,
+            sourceName,
+            category,
+            publishedAt
+          }
+        });
+      } catch (dbErr) {
+        console.warn('MySQL unavailable on POST /bookmarks, using memory fallback:', dbErr.message);
       }
-
-      // Insert or update on duplicate (user_id, url)
-      const [result] = await pool.execute(
-        `INSERT INTO saved_articles 
-          (user_id, title, description, url, image_url, source_name, category, published_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-         ON DUPLICATE KEY UPDATE
-           title = VALUES(title),
-           description = VALUES(description),
-           image_url = VALUES(image_url),
-           source_name = VALUES(source_name),
-           category = VALUES(category),
-           saved_at = CURRENT_TIMESTAMP`,
-        [
-          userId,
-          title,
-          description || '',
-          url,
-          imageUrl || null,
-          sourceName || 'Unknown',
-          category || 'general',
-          formattedPublishedAt
-        ]
-      );
-
-      const bookmarkId = result.insertId || (
-        (await pool.execute('SELECT id FROM saved_articles WHERE user_id = ? AND url = ? LIMIT 1', [userId, url]))[0][0]?.id
-      );
-
-      return res.status(201).json({
-        status: 'success',
-        message: 'Article saved to bookmarks.',
-        bookmark: {
-          id: bookmarkId,
-          userId,
-          title,
-          description,
-          url,
-          imageUrl,
-          sourceName,
-          category,
-          publishedAt
-        }
-      });
-    } catch (dbErr) {
-      console.warn('MySQL unavailable on POST /bookmarks, using memory fallback:', dbErr.message);
-
-      const userList = memoryBookmarks.get(userId) || [];
-      const existingIndex = userList.findIndex(b => b.url === url);
-      const newBookmark = {
-        id: `mem_bm_${Date.now()}`,
-        userId,
-        title,
-        description: description || '',
-        url,
-        imageUrl: imageUrl || null,
-        sourceName: sourceName || 'Unknown',
-        category: category || 'general',
-        publishedAt: publishedAt || new Date().toISOString(),
-        savedAt: new Date().toISOString()
-      };
-
-      if (existingIndex >= 0) {
-        userList[existingIndex] = newBookmark;
-      } else {
-        userList.unshift(newBookmark);
-      }
-      memoryBookmarks.set(userId, userList);
-
-      return res.status(201).json({
-        status: 'success',
-        message: 'Article saved to bookmarks.',
-        bookmark: newBookmark
-      });
     }
+
+    const userList = memoryBookmarks.get(userId) || [];
+    const existingIndex = userList.findIndex(b => b.url === url);
+    const newBookmark = {
+      id: `mem_bm_${Date.now()}`,
+      userId,
+      title,
+      description: description || '',
+      url,
+      imageUrl: imageUrl || null,
+      sourceName: sourceName || 'Unknown',
+      category: category || 'general',
+      publishedAt: publishedAt || new Date().toISOString(),
+      savedAt: new Date().toISOString()
+    };
+
+    if (existingIndex >= 0) {
+      userList[existingIndex] = newBookmark;
+    } else {
+      userList.unshift(newBookmark);
+    }
+    memoryBookmarks.set(userId, userList);
+
+    return res.status(201).json({
+      status: 'success',
+      message: 'Article saved to bookmarks.',
+      bookmark: newBookmark
+    });
   } catch (error) {
     next(error);
   }
@@ -177,24 +182,26 @@ router.delete('/:id', async (req, res, next) => {
     const userId = req.user.id;
     const bookmarkId = req.params.id;
 
-    try {
-      const numId = parseInt(bookmarkId, 10);
-      if (!isNaN(numId)) {
-        const [result] = await pool.execute(
-          'DELETE FROM saved_articles WHERE id = ? AND user_id = ?',
-          [numId, userId]
-        );
+    if (isDbAvailable) {
+      try {
+        const numId = parseInt(bookmarkId, 10);
+        if (!isNaN(numId)) {
+          const [result] = await pool.execute(
+            'DELETE FROM saved_articles WHERE id = ? AND user_id = ?',
+            [numId, userId]
+          );
 
-        if (result.affectedRows > 0) {
-          return res.json({
-            status: 'success',
-            message: 'Bookmark removed successfully.',
-            removedId: bookmarkId
-          });
+          if (result.affectedRows > 0) {
+            return res.json({
+              status: 'success',
+              message: 'Bookmark removed successfully.',
+              removedId: bookmarkId
+            });
+          }
         }
+      } catch (dbErr) {
+        console.warn('MySQL unavailable on DELETE /bookmarks, using memory fallback:', dbErr.message);
       }
-    } catch (dbErr) {
-      console.warn('MySQL unavailable on DELETE /bookmarks, using memory fallback:', dbErr.message);
     }
 
     // In-memory fallback

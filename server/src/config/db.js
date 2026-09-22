@@ -12,25 +12,39 @@ const path = require('path');
 // Ensure environment variables are loaded
 dotenv.config({ path: path.join(__dirname, '../../.env') });
 
-const pool = mysql.createPool({
+const isVercel = Boolean(process.env.VERCEL);
+const hasExternalDb = Boolean(
+  process.env.DB_HOST && 
+  process.env.DB_HOST !== 'localhost' && 
+  process.env.DB_HOST !== '127.0.0.1'
+);
+const isDbAvailable = !isVercel || hasExternalDb;
+
+const poolConfig = {
   host: process.env.DB_HOST || 'localhost',
   port: parseInt(process.env.DB_PORT || '3306', 10),
   user: process.env.DB_USER || 'root',
   password: process.env.DB_PASSWORD || '',
   database: process.env.DB_NAME || 'real_news_db',
   waitForConnections: true,
-  connectionLimit: 10,
+  connectionLimit: 5,
   queueLimit: 0,
+  connectTimeout: 2000,
   enableKeepAlive: true,
   keepAliveInitialDelay: 0,
   timezone: '+00:00'
-});
+};
+
+const pool = mysql.createPool(poolConfig);
 
 /**
  * Tests database connectivity
  * @returns {Promise<boolean>}
  */
 async function testConnection() {
+  if (!isDbAvailable) {
+    return false;
+  }
   try {
     const connection = await pool.getConnection();
     await connection.ping();
@@ -44,5 +58,6 @@ async function testConnection() {
 
 module.exports = {
   pool,
-  testConnection
+  testConnection,
+  isDbAvailable
 };
